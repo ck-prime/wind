@@ -1,3 +1,3 @@
 # Scripts
 
-Reserved for build and development scripts. Phase 1 uses Cargo commands from the repository root and does not need a script.
+`package-macos-app.sh` builds the release supervisor and assembles a background `Wind.app` bundle outside the repository. It does not sign with a Developer ID, notarize, or install a LaunchAgent.

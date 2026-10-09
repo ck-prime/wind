@@ -3,13 +3,14 @@
 //! ScreenCaptureKit takes one full-display image. `CGPreflightScreenCaptureAccess`
 //! reports whether Screen Recording access is granted. It does not prompt.
 //! This crate does not call `CGRequestScreenCaptureAccess` and does not read TCC.
-//! System Settings opens only from an explicit settings request.
+//! System Settings opens only from an explicit settings request. The permission
+//! guide is an explanation dialog; it does not grant or request access.
 
 use std::time::SystemTime;
 
 use screencapturekit::error::{SCError, SCStreamErrorCode};
 use screencapturekit::screenshot_manager::{CGImageExt, SCScreenshotManager};
-use screencapturekit::shareable_content::{SCShareableContent, SCWindow};
+use screencapturekit::shareable_content::SCShareableContent;
 use screencapturekit::stream::configuration::SCStreamConfiguration;
 use screencapturekit::stream::content_filter::SCContentFilter;
 use wind_core::{
@@ -18,6 +19,7 @@ use wind_core::{
 };
 mod activity;
 mod app;
+mod quit;
 mod secret;
 mod settings;
 mod url;
@@ -26,9 +28,16 @@ mod video;
 use wind_screenshot::{ImageFormat, Screenshot, ScreenshotError};
 
 pub use activity::{input_monitoring_permission, MacosActivityProvider};
-pub use app::{application_status, current_application};
+pub use app::{application_status, current_application, prepare_background_application};
+pub use quit::{
+    dismiss_permission_guide, finish_system_quit, install_system_quit_handler, pump_main_run_loop,
+    reopen_and_quit, set_permission_guide_pid,
+};
 pub use secret::MacosSecretStore;
-pub use settings::open_system_settings;
+pub use settings::{
+    guide_permission_until_granted, guide_permissions_until_granted, open_system_settings,
+    PermissionGuideOutcome,
+};
 pub use url::MacosUrlProvider;
 pub use video::MacosVideoProvider;
 
@@ -88,7 +97,6 @@ pub fn capture_full_display() -> Result<Screenshot, ScreenshotError> {
     }
     let filter = SCContentFilter::create()
         .with_display(display)
-        .with_excluding_windows(&[] as &[SCWindow])
         .build()
         .map_err(map_capture_error)?;
     let configuration = SCStreamConfiguration::new()

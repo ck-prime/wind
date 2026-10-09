@@ -37,10 +37,10 @@ pub fn open_settings(capability: Capability) -> Result<(), PermissionError> {
     };
     #[cfg(target_os = "macos")]
     {
-        return wind_macos::open_system_settings(_url).map_err(|_| PermissionError::Failed {
+        wind_macos::open_system_settings(_url).map_err(|_| PermissionError::Failed {
             capability,
             reason: "System Settings could not be opened".to_string(),
-        });
+        })
     }
     #[cfg(not(target_os = "macos"))]
     {

@@ -8,6 +8,9 @@ use std::time::{Duration, Instant};
 use wind_core::Result;
 
 fn main() {
+    if reopen_after_exit() {
+        return;
+    }
     #[cfg(debug_assertions)]
     if env::var_os("WIND_SERVICE_TEST_MODE").is_some() {
         wind_supervisor::run_service_test_mode();
@@ -34,15 +37,10 @@ fn main() {
         write_stdout(&wind_supervisor::format_shutdown(&outcome.shutdown_report));
         std::process::exit(1);
     }
-    if command.screenshots > 0
-        || command.record_seconds.is_some()
-        || command.current_application
-        || command.current_url
-        || command.activity_snapshot
-        || command.permissions
-        || command.open_permission.is_some()
-    {
+    if command.one_shot() {
         runtime.request_shutdown();
+    } else {
+        runtime.spawn_permission_guides();
     }
     let outcome = runtime.wait();
     write_stdout(&wind_supervisor::format_shutdown(&outcome.shutdown_report));
@@ -59,6 +57,51 @@ fn main() {
     }
 }
 
+/// Wait for the previous Wind process to exit, then open the app once.
+fn reopen_after_exit() -> bool {
+    let Ok(pid_text) = env::var("WIND_REOPEN_WAIT_PID") else {
+        return false;
+    };
+    let Ok(bundle) = env::var("WIND_REOPEN_BUNDLE") else {
+        return false;
+    };
+    let Ok(pid) = pid_text.parse::<u32>() else {
+        return false;
+    };
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while Instant::now() < deadline && process_alive(pid) {
+        thread::sleep(Duration::from_millis(200));
+    }
+    thread::sleep(Duration::from_millis(800));
+    if !another_wind_is_running() {
+        let _ = std::process::Command::new("/usr/bin/open")
+            .arg(bundle)
+            .status();
+    }
+    true
+}
+
+fn process_alive(pid: u32) -> bool {
+    std::process::Command::new("/bin/kill")
+        .args(["-0", &pid.to_string()])
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+fn another_wind_is_running() -> bool {
+    let me = std::process::id();
+    let Ok(output) = std::process::Command::new("/usr/bin/pgrep")
+        .args(["-f", "Wind.app/Contents/MacOS/Wind"])
+        .output()
+    else {
+        return false;
+    };
+    String::from_utf8_lossy(&output.stdout)
+        .split_whitespace()
+        .filter_map(|token| token.parse::<u32>().ok())
+        .any(|pid| pid != me)
+}
+
 struct Command {
     screenshots: u32,
     record_seconds: Option<u64>,
@@ -70,6 +113,16 @@ struct Command {
 }
 
 impl Command {
+    fn one_shot(&self) -> bool {
+        self.screenshots > 0
+            || self.record_seconds.is_some()
+            || self.current_application
+            || self.current_url
+            || self.activity_snapshot
+            || self.permissions
+            || self.open_permission.is_some()
+    }
+
     fn parse(args: impl Iterator<Item = String>) -> Result<Self> {
         let mut screenshots = 0u32;
         let mut record_seconds = None;

@@ -221,7 +221,21 @@ pub fn ensure_runtime_paths(paths: &RuntimePaths) -> Result<(), PlatformError> {
 #[cfg(target_os = "macos")]
 fn macos_host_paths(product_identifier: &str) -> Result<RuntimePaths, PlatformError> {
     let home = required_env_path("HOME")?;
-    macos_runtime_paths(&home, product_identifier)
+    let runtime_root = runtime_root_override(std::env::var_os("WIND_RUNTIME_ROOT"))?;
+    macos_paths(&home, runtime_root.as_deref(), product_identifier)
+}
+
+/// macOS paths for a home directory, or for `WIND_RUNTIME_ROOT` when it is set.
+///
+/// The override is the home anchor. Library paths stay under that root, so a
+/// test profile does not write the user's normal Application Support directory.
+#[cfg(target_os = "macos")]
+fn macos_paths(
+    home: &Path,
+    runtime_root: Option<&Path>,
+    product_identifier: &str,
+) -> Result<RuntimePaths, PlatformError> {
+    macos_runtime_paths(runtime_root.unwrap_or(home), product_identifier)
 }
 
 #[cfg(target_os = "windows")]
@@ -487,6 +501,23 @@ mod tests {
         assert_eq!(paths.runtime_dir, runtime.join("com.example.agent"));
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_override_root_replaces_the_home_anchor() {
+        let home = anchor();
+        let root = anchor();
+        let paths = super::macos_paths(&home, Some(&root), "com.wind.agent").unwrap();
+        assert!(paths.data_dir.starts_with(&root));
+        assert!(!paths.data_dir.starts_with(&home));
+        assert!(paths.data_dir.ends_with(
+            Path::new("Library")
+                .join("Application Support")
+                .join("com.wind.agent")
+                .join("data")
+        ));
+        assert!(paths.log_dir.starts_with(&root));
+    }
+
     #[test]
     fn path_identifiers_reject_separators() {
         let home = anchor();
@@ -517,7 +548,12 @@ mod tests {
                 .is_none()
         );
         assert!(super::runtime_root_override(Some("relative".into())).is_err());
-        let root = super::runtime_root_override(Some(r"D:\wind-phase10".into()))
+        let absolute = if cfg!(windows) {
+            std::ffi::OsString::from(r"D:\wind-phase10")
+        } else {
+            std::ffi::OsString::from("/tmp/wind-phase11")
+        };
+        let root = super::runtime_root_override(Some(absolute))
             .unwrap()
             .unwrap();
         assert!(root.is_absolute());

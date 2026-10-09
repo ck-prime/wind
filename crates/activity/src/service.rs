@@ -60,12 +60,20 @@ impl ActivityService {
         }
     }
 
+    /// Try the listener again when access was missing at startup and is on now.
+    fn current_capability(&mut self) -> CapabilityStatus {
+        if self.provider.capability_status() == CapabilityStatus::PermissionRequired {
+            let _ = self.provider.start();
+        }
+        self.provider.capability_status()
+    }
+
     /// Read the cumulative counters without writing a row or moving the baseline.
     pub fn observe(&mut self) -> std::result::Result<ActivitySnapshot, ActivityError> {
         if !self.started {
             return Err(ActivityError::Stopped);
         }
-        match self.provider.capability_status() {
+        match self.current_capability() {
             CapabilityStatus::Available => {}
             CapabilityStatus::PermissionRequired => {
                 return Err(ActivityError::PermissionRequired {
@@ -91,7 +99,7 @@ impl ActivityService {
         if !self.started {
             return Err(ActivityError::Stopped);
         }
-        match self.provider.capability_status() {
+        match self.current_capability() {
             CapabilityStatus::Available => {}
             CapabilityStatus::PermissionRequired => {
                 return Err(ActivityError::PermissionRequired {

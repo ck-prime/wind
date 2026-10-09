@@ -16,6 +16,10 @@ wind-screenshot = { path = "../../crates/screenshot" }
 wind-storage = { path = "../../crates/storage" }
 wind-url-tracker = { path = "../../crates/url-tracker" }
 wind-video = { path = "../../crates/video" }
+
+# WinRT and Windows Graphics Capture bindings reference types that windows-core
+# only emits for a Windows target. A macOS workspace build must not compile them.
+[target.'cfg(windows)'.dependencies]
 xcap = { version = "0.9.8", default-features = false, features = ["image", "wgc"] }
 windows = { version = "0.61", features = [
     "Graphics_Capture",

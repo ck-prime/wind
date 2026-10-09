@@ -87,7 +87,6 @@ impl VideoProvider for MacosVideoProvider {
         }
         let filter = SCContentFilter::create()
             .with_display(display)
-            .with_excluding_windows(&[] as &[SCWindow])
             .build()
             .map_err(video_capture)?;
         // ScreenCaptureKit owns the recording queue and drops frames when the
@@ -108,7 +107,7 @@ impl VideoProvider for MacosVideoProvider {
                 reason: "ScreenCaptureKit could not create a recording output".to_string(),
             }
         })?;
-        let mut stream = SCStream::new(&filter, &configuration).map_err(video_capture)?;
+        let stream = SCStream::new(&filter, &configuration).map_err(video_capture)?;
         stream
             .add_recording_output(&recording)
             .map_err(video_capture)?;
@@ -125,7 +124,7 @@ impl VideoProvider for MacosVideoProvider {
     }
 
     fn stop(&mut self) -> Result<VideoResult, VideoError> {
-        let Some(mut session) = self.session.take() else {
+        let Some(session) = self.session.take() else {
             return Err(VideoError::NotRecording);
         };
         let width = session.width;

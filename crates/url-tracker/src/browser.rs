@@ -42,20 +42,44 @@ mod tests {
 
     #[test]
     fn known_executables_map_to_browsers() {
-        assert_eq!(
-            classify_browser_executable(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
-            Some(BrowserKind::Chrome)
-        );
-        assert_eq!(
-            classify_browser_executable(
-                r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
-            ),
-            Some(BrowserKind::Edge)
-        );
-        assert_eq!(
-            classify_browser_executable(r"C:\Program Files\Mozilla Firefox\firefox.exe"),
-            Some(BrowserKind::Firefox)
-        );
+        #[cfg(windows)]
+        {
+            assert_eq!(
+                classify_browser_executable(
+                    r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+                ),
+                Some(BrowserKind::Chrome)
+            );
+            assert_eq!(
+                classify_browser_executable(
+                    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+                ),
+                Some(BrowserKind::Edge)
+            );
+            assert_eq!(
+                classify_browser_executable(r"C:\Program Files\Mozilla Firefox\firefox.exe"),
+                Some(BrowserKind::Firefox)
+            );
+        }
+        #[cfg(not(windows))]
+        {
+            assert_eq!(
+                classify_browser_executable(
+                    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+                ),
+                Some(BrowserKind::Chrome)
+            );
+            assert_eq!(
+                classify_browser_executable(
+                    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+                ),
+                Some(BrowserKind::Edge)
+            );
+            assert_eq!(
+                classify_browser_executable("/Applications/Firefox.app/Contents/MacOS/firefox"),
+                Some(BrowserKind::Firefox)
+            );
+        }
         assert_eq!(
             classify_browser_executable("/usr/bin/chromium"),
             Some(BrowserKind::Chromium)

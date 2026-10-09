@@ -263,7 +263,7 @@ fn children_of(element: &Ax) -> Vec<Ax> {
     if unsafe { CFGetTypeID(value.0) } != unsafe { CFArrayGetTypeID() } {
         return Vec::new();
     }
-    let count = unsafe { CFArrayGetCount(value.0) }.clamp(0, MAX_CHILDREN);
+    let count = unsafe { CFArrayGetCount(value.0) }.clamp(0, MAX_CHILDREN as isize);
     let mut children = Vec::with_capacity(count as usize);
     for index in 0..count {
         let child = unsafe { CFArrayGetValueAtIndex(value.0, index) };
@@ -320,6 +320,11 @@ fn cf_to_string(value: *const c_void) -> Option<String> {
 }
 
 fn trusted() -> bool {
+    accessibility_granted()
+}
+
+/// Whether Accessibility trust is on. This does not prompt or change it.
+pub fn accessibility_granted() -> bool {
     unsafe { AXIsProcessTrusted() }
 }
 

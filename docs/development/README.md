@@ -28,7 +28,7 @@ The service runtime can register, start, stop, restart, report health, and shut 
 
 ## Platform builds
 
-`platforms/macos` and `platforms/linux` are excluded from workspace members so a Windows `cargo test --workspace` does not need Swift, pkg-config, or PipeWire. On each host, `wind-platform` depends on that host's provider, so the workspace command builds the provider for the machine you are on.
+`platforms/macos` and `platforms/linux` are excluded from workspace members so a Windows `cargo test --workspace` does not need Swift, pkg-config, or PipeWire. On each host, `wind-platform` depends on that host's provider, so the workspace command builds the provider for the machine you are on. `wind-windows` stays a workspace member, and its WinRT dependencies compile only when the target is Windows.
 
 ```text
 Windows:
@@ -37,6 +37,9 @@ Windows:
 macOS (Rust 1.85+, Xcode Command Line Tools, macOS 15 SDK for video):
     cargo test --workspace
     cargo test --manifest-path platforms/macos/Cargo.toml
+    scripts/package-macos-app.sh
+
+`scripts/package-macos-app.sh` builds the release `wind` binary and wraps it in a `Wind.app` bundle. Release configuration and the logo are embedded in that binary. `WIND_RUNTIME_ROOT` selects an absolute home anchor so a test run does not write `~/Library`.
 
 Linux (pkg-config, libxcb, libpipewire, clang; OpenH264 fetches Cisco's BSD binary at build):
     cargo test --workspace

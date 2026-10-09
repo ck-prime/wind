@@ -7,9 +7,10 @@
 //! are explicit. Activity counts input volume when the service is running and
 //! reports it when a snapshot is requested. Finalized tracking records and
 //! artifact metadata are written to the local store. This process
-//! does not store keystrokes or pointer coordinates, request permissions,
+//! does not store keystrokes or pointer coordinates, grant permissions,
 //! authenticate, connect to a network, update components, or install an
-//! operating-system service.
+//! operating-system service. On macOS it can show a dialog that explains the
+//! Privacy & Security steps when a permission is missing.
 
 mod hosted;
 mod interval;
@@ -31,8 +32,9 @@ use wind_core::{
 };
 
 use wind_platform::{
-    host_activity_provider, host_app_tracker, host_screenshot_provider, host_url_tracker,
-    host_video_provider, HostPermissionProvider, PlatformInfo, PlatformRuntime, RuntimePaths,
+    guide_permission_until_granted, guide_permissions_until_granted, host_activity_provider,
+    host_app_tracker, host_screenshot_provider, host_url_tracker, host_video_provider,
+    HostPermissionProvider, PermissionGuideChoice, PlatformInfo, PlatformRuntime, RuntimePaths,
     SessionContext,
 };
 use wind_service_manager::{CapabilityObservation, RuntimeSettings, ServiceManager, ServiceStatus};
@@ -332,7 +334,7 @@ impl Session {
                 let wait = interval::wait_budget(now, tracking.interval_ends_at(), health);
                 if wait.is_zero() {
                     if self.close_due(&mut tracking, SystemTime::now(), false) == 0
-                        && shutdown.wait_timeout(Duration::from_millis(50))
+                        && wait_resident(shutdown, Duration::from_millis(50))
                     {
                         break;
                     }
@@ -340,7 +342,7 @@ impl Session {
                     let _ = self.manager.maintain_running();
                     continue;
                 }
-                if shutdown.wait_timeout(wait) {
+                if wait_resident(shutdown, wait) {
                     break;
                 }
                 self.close_due(&mut tracking, SystemTime::now(), false);
@@ -701,11 +703,75 @@ impl PreparedRuntime {
         format_permission_report(&lines)
     }
 
+    /// Guide missing privacy switches without blocking tracking.
+    ///
+    /// Each dialog stays up until that switch is on. Recording of anything
+    /// already allowed continues on the resident loop.
+    pub fn spawn_permission_guides(&self) {
+        let missing = self.capabilities_needing_a_guide();
+        if missing.is_empty() {
+            return;
+        }
+        let names = missing
+            .iter()
+            .map(|capability| capability.as_str())
+            .collect::<Vec<_>>()
+            .join(",");
+        self.session.log(
+            Level::Info,
+            &format!("permission_guide capabilities={names} showing=true"),
+        );
+        let display_name = self.report.display_name.clone();
+        let shutdown = self.shutdown.clone();
+        if std::thread::Builder::new()
+            .name("wind-permission-guide".to_string())
+            .spawn(move || {
+                guide_permissions_until_granted(&display_name, &missing, &|| {
+                    shutdown.is_requested()
+                });
+            })
+            .is_err()
+        {
+            self.session.log(
+                Level::Warn,
+                "permission_guide could not be shown; recording continues",
+            );
+        }
+    }
+
+    fn capabilities_needing_a_guide(&self) -> Vec<Capability> {
+        [
+            Capability::ScreenCapture,
+            Capability::InputMonitoring,
+            Capability::BrowserUrl,
+        ]
+        .into_iter()
+        .filter(|capability| {
+            guide_service_enabled(&self.session, *capability)
+                && needs_permission_guide(&self.session.manager, *capability)
+        })
+        .collect()
+    }
+
     /// Open the settings surface, then check the permission again.
+    ///
+    /// On macOS the dialog stays up until the switch is on or the person skips.
     pub fn open_permission(
         &self,
         capability: Capability,
     ) -> std::result::Result<String, wind_core::PermissionError> {
+        let choice =
+            guide_permission_until_granted(&self.report.display_name, capability, &|| false);
+        if choice == PermissionGuideChoice::Skipped {
+            return Ok("Permission guide: Skipped\nThe switch was left off.\n".to_string());
+        }
+        if choice == PermissionGuideChoice::Granted {
+            let state = self.session.manager.permission_status(capability).state;
+            return Ok(format!(
+                "Permission guide: Granted\nPermission: {}\n",
+                state.as_str()
+            ));
+        }
         let before = self.session.manager.permission_status(capability).state;
         let opened = self.session.manager.open_settings(capability);
         let after = self.session.manager.permission_status(capability).state;
@@ -729,6 +795,7 @@ impl PreparedRuntime {
     pub fn wait(mut self) -> RunOutcome {
         let (shutdown_report, shutdown_failures) = self.session.reside(&self.shutdown);
         let start_failures = std::mem::take(&mut self.session.start_failures);
+        wind_platform::finish_system_quit();
         RunOutcome {
             report: self.report,
             shutdown_report,
@@ -747,11 +814,17 @@ pub fn prepare() -> Result<PreparedRuntime, StartupError> {
     let shutdown = ShutdownCoordinator::new();
     let notify = shutdown.clone();
     if let Err(error) = wind_platform::install_termination_handler(move || {
+        wind_platform::dismiss_permission_guide();
         let _ = notify.request();
     }) {
         let _ = session.shutdown();
         return Err(StartupError::Platform(error));
     }
+    let notify = shutdown.clone();
+    wind_platform::install_system_quit_handler(move || {
+        wind_platform::dismiss_permission_guide();
+        let _ = notify.request();
+    });
     let report = session.runtime_report();
     Ok(PreparedRuntime {
         session,
@@ -890,6 +963,49 @@ pub fn format_permission_report(lines: &[PermissionLine]) -> String {
         }
     }
     text
+}
+
+fn wait_resident(shutdown: &ShutdownCoordinator, timeout: Duration) -> bool {
+    wind_platform::wait_until_quit(
+        timeout,
+        || shutdown.is_requested(),
+        |slice| shutdown.wait_timeout(slice),
+    )
+}
+
+fn guide_service_enabled(session: &Session, capability: Capability) -> bool {
+    match capability {
+        Capability::ScreenCapture | Capability::VideoCapture => {
+            service_accepts_a_guide(session, ServiceId::Screenshot)
+                || service_accepts_a_guide(session, ServiceId::Video)
+        }
+        Capability::InputMonitoring => service_accepts_a_guide(session, ServiceId::Activity),
+        Capability::BrowserUrl => service_accepts_a_guide(session, ServiceId::UrlTracker),
+        Capability::ActiveApplication => false,
+    }
+}
+
+fn service_accepts_a_guide(session: &Session, id: ServiceId) -> bool {
+    session
+        .status(id)
+        .is_some_and(|status| status.descriptor.enabled && status.state != ServiceState::Disabled)
+}
+
+fn needs_permission_guide(
+    manager: &wind_service_manager::ServiceManager,
+    capability: Capability,
+) -> bool {
+    let line = permission_line(manager, capability);
+    if !line.settings {
+        return false;
+    }
+    let capability_status = match line.service_health {
+        Some(health) if line.permission == PermissionState::Unknown => {
+            capability_from_health(health)
+        }
+        _ => line.capability_status,
+    };
+    wind_core::user_permission_status(line.permission, capability_status).offers_settings()
 }
 
 fn permission_line(

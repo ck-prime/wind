@@ -8,31 +8,49 @@
 //! This crate does not inject code, read process memory, or require an
 //! administrator account.
 
+#[cfg(windows)]
 mod activity;
+#[cfg(windows)]
 mod app;
+#[cfg(windows)]
 mod classify;
+#[cfg(windows)]
 mod encode;
+#[cfg(windows)]
 mod screenshot;
+#[cfg(windows)]
 mod secret;
+#[cfg(windows)]
 mod url;
+#[cfg(windows)]
 mod video;
+#[cfg(windows)]
 mod wgc;
 
+#[cfg(windows)]
 pub use activity::WindowsActivityProvider;
+#[cfg(windows)]
 pub use app::{application_status, current_application};
+#[cfg(windows)]
 pub use screenshot::{capture_full_display, screen_capture_status};
+#[cfg(windows)]
 pub use secret::WindowsSecretStore;
+#[cfg(windows)]
 pub use url::WindowsUrlProvider;
+#[cfg(windows)]
 pub use video::{video_capture_status, WindowsVideoProvider};
 
 /// Attach to a parent console when one already exists.
 ///
 /// A double-clicked GUI process has no parent console, so this does nothing
 /// and does not create a window. A process started from a terminal can still
-/// receive Ctrl+C and Ctrl+Break.
+/// receive Ctrl+C and Ctrl+Break. Non-Windows builds have no console to attach.
 pub fn attach_parent_console() {
-    use windows::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
-    unsafe {
-        let _ = AttachConsole(ATTACH_PARENT_PROCESS);
+    #[cfg(windows)]
+    {
+        use windows::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
+        unsafe {
+            let _ = AttachConsole(ATTACH_PARENT_PROCESS);
+        }
     }
 }

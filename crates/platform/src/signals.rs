@@ -14,7 +14,8 @@ use crate::paths::PlatformError;
 
 /// Ask `notify` when the console or the operating system requests termination.
 ///
-/// On Unix this is `SIGINT` and `SIGTERM`. On Windows this is a console
+/// On Unix this is `SIGINT`, `SIGTERM`, and `SIGHUP`. That requires the `ctrlc`
+/// `termination` feature. On Windows this is a console
 /// control event such as Ctrl+C or console close. It is not a Service Control
 /// Manager handler.
 ///

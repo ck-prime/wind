@@ -1,0 +1,8 @@
+# ScreenCaptureKit's Swift bridge records @rpath/libswift_Concurrency.dylib.
+# The operating system copy lives in /usr/lib/swift. An extra rpath lets the
+# process load that copy without bundling the Command Line Tools library.
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "link-arg=-Wl,-rpath,/usr/lib/swift"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "link-arg=-Wl,-rpath,/usr/lib/swift"]

@@ -1,8 +1,9 @@
 //! Permission providers.
 //!
 //! Platform modules answer capability questions. They do not capture data,
-//! prompt the user, or bypass an operating-system control. Settings open only
-//! when `open_settings` is called and a real destination exists.
+//! grant a permission, or bypass an operating-system control. Settings open
+//! only when `open_settings` is called and a real destination exists. On macOS
+//! the supervisor can first show a dialog that lists the Privacy & Security steps.
 
 mod linux;
 mod macos;
@@ -89,6 +90,57 @@ fn host_can_open_settings(capability: Capability) -> bool {
     {
         let _ = capability;
         false
+    }
+}
+
+/// Result of staying with one privacy switch until it is on or skipped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PermissionGuideChoice {
+    /// The check now reports access.
+    Granted,
+    /// The person left this switch for later.
+    Skipped,
+    /// This system has no explanation dialog for the capability.
+    Unavailable,
+}
+
+/// Keep a dialog up until one capability is granted or skipped.
+///
+/// On macOS this opens the matching Settings pane first. It does not grant
+/// the permission. Other systems return [`PermissionGuideChoice::Unavailable`].
+pub fn guide_permission_until_granted(
+    display_name: &str,
+    capability: Capability,
+    stop: &dyn Fn() -> bool,
+) -> PermissionGuideChoice {
+    #[cfg(target_os = "macos")]
+    {
+        match wind_macos::guide_permission_until_granted(display_name, capability, 1, 1, stop) {
+            wind_macos::PermissionGuideOutcome::Granted => PermissionGuideChoice::Granted,
+            wind_macos::PermissionGuideOutcome::Skipped => PermissionGuideChoice::Skipped,
+            wind_macos::PermissionGuideOutcome::Unavailable => PermissionGuideChoice::Unavailable,
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (display_name, capability, stop);
+        PermissionGuideChoice::Unavailable
+    }
+}
+
+/// Guide every listed capability, one switch at a time.
+pub fn guide_permissions_until_granted(
+    display_name: &str,
+    capabilities: &[Capability],
+    stop: &dyn Fn() -> bool,
+) {
+    #[cfg(target_os = "macos")]
+    {
+        wind_macos::guide_permissions_until_granted(display_name, capabilities, stop);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (display_name, capabilities, stop);
     }
 }
 

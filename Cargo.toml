@@ -24,7 +24,7 @@ publish = false
 rust-version = "1.74"
 
 [workspace.dependencies]
-ctrlc = "3.4"
+ctrlc = { version = "3.4", features = ["termination"] }
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 wind-core = { path = "crates/core" }

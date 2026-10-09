@@ -32,11 +32,66 @@ pub use paths::{
     windows_runtime_paths, LinuxPathEnv, PlatformError, RuntimePaths,
 };
 pub use permissions::{
-    apply_session, linux_permission, macos_permission, windows_permission, HostPermissionProvider,
+    apply_session, guide_permission_until_granted, guide_permissions_until_granted,
+    linux_permission, macos_permission, windows_permission, HostPermissionProvider,
+    PermissionGuideChoice,
 };
 pub use screenshot::{host_screenshot_provider, HostScreenshotProvider};
 pub use secret::host_secret_store;
 pub use signals::install_termination_handler;
+
+/// Block until `is_requested` or `timeout`.
+///
+/// On macOS the main run loop is pumped so a Quit & Reopen request can land.
+/// `park` is the wait used on other systems.
+pub fn wait_until_quit(
+    timeout: std::time::Duration,
+    is_requested: impl Fn() -> bool,
+    park: impl Fn(std::time::Duration) -> bool,
+) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = park;
+        let started = std::time::Instant::now();
+        while !is_requested() {
+            let left = timeout.saturating_sub(started.elapsed());
+            if left.is_zero() {
+                return false;
+            }
+            wind_macos::pump_main_run_loop(left.min(std::time::Duration::from_millis(200)));
+        }
+        true
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = is_requested;
+        park(timeout)
+    }
+}
+
+/// Accept macOS Quit & Reopen. Other systems ignore this.
+pub fn install_system_quit_handler(notify: impl Fn() + Send + Sync + 'static) {
+    #[cfg(target_os = "macos")]
+    {
+        wind_macos::install_system_quit_handler(notify);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = notify;
+    }
+}
+
+/// Close a visible permission dialog. Other systems do nothing.
+pub fn dismiss_permission_guide() {
+    #[cfg(target_os = "macos")]
+    wind_macos::dismiss_permission_guide();
+}
+
+/// Finish a Quit & Reopen that Wind deferred until its own shutdown completed.
+pub fn finish_system_quit() {
+    #[cfg(target_os = "macos")]
+    wind_macos::finish_system_quit();
+}
 pub use url_tracker::{host_url_tracker, HostUrlTracker};
 pub use video::{host_video_provider, HostVideoProvider};
 
@@ -211,6 +266,8 @@ impl PlatformRuntime for HostRuntime {
 }
 
 pub fn host_runtime() -> HostRuntime {
+    #[cfg(target_os = "macos")]
+    wind_macos::prepare_background_application();
     HostRuntime
 }
 

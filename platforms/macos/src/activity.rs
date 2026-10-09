@@ -16,10 +16,12 @@ use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use objc2_core_foundation::{CFMachPort, CFRunLoop, CFRunLoopMode};
+use objc2_core_foundation::{
+    kCFRunLoopCommonModes, kCFRunLoopDefaultMode, CFMachPort, CFRetained, CFRunLoop,
+};
 use objc2_core_graphics::{
-    CGEvent, CGEventMaskBit, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement,
-    CGEventTapProxy, CGEventType, CGPreflightListenEventAccess,
+    CGEvent, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventTapProxy,
+    CGEventType, CGPreflightListenEventAccess,
 };
 use wind_activity::{ActivityCounters, ActivityError, ActivityProvider, ActivitySnapshot};
 use wind_core::{Capability, CapabilityStatus, PermissionState, PermissionStatus};
@@ -232,17 +234,24 @@ fn listen(
         let _ = sender.send(Err("event tap run loop source was not created".to_string()));
         return;
     };
-    let current = CFRunLoop::get_current();
-    current.add_source(Some(&source), Some(unsafe { kCFRunLoopCommonModes }));
-    run_loop_slot.store(
-        objc2_core_foundation::CFRetained::as_ptr(&current) as *mut CFRunLoop,
-        Ordering::Release,
-    );
+    let Some(current) = CFRunLoop::current() else {
+        COUNTERS.with(|slot| slot.set(std::ptr::null()));
+        let _ = sender.send(Err("the current run loop is unavailable".to_string()));
+        return;
+    };
+    // SAFETY: kCFRunLoopCommonModes is a CoreFoundation constant. The source
+    // belongs to this thread's run loop and is removed when the thread exits.
+    unsafe {
+        current.add_source(Some(&source), kCFRunLoopCommonModes);
+    }
+    run_loop_slot.store(CFRetained::as_ptr(&current).as_ptr(), Ordering::Release);
     let _ = sender.send(Ok(()));
     while !stop.load(Ordering::Acquire) {
-        let _ = CFRunLoop::run_in_mode(Some(unsafe { kCFRunLoopDefaultMode }), 0.2, true);
+        // SAFETY: kCFRunLoopDefaultMode is a CoreFoundation constant.
+        let _ = unsafe { CFRunLoop::run_in_mode(kCFRunLoopDefaultMode, 0.2, true) };
     }
     run_loop_slot.store(std::ptr::null_mut(), Ordering::Release);
+    drop(current);
     COUNTERS.with(|slot| slot.set(std::ptr::null()));
 }
 
@@ -259,7 +268,8 @@ fn event_mask() -> u64 {
         OTHER_DOWN,
         SCROLL,
     ] {
-        mask |= CGEventMaskBit(CGEventType(value));
+        // CGEventMaskBit(type) is 1 shifted by the event type.
+        mask |= 1u64 << value;
     }
     mask
 }
@@ -287,9 +297,4 @@ fn classify(event_type: u32, counters: &ActivityCounters) {
         SCROLL => counters.record_mouse_scroll(),
         _ => {}
     }
-}
-
-unsafe extern "C" {
-    static kCFRunLoopCommonModes: &'static CFRunLoopMode;
-    static kCFRunLoopDefaultMode: &'static CFRunLoopMode;
 }
