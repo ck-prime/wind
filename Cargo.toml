@@ -1,0 +1,42 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/supervisor",
+    "crates/core",
+    "crates/config",
+    "crates/service-manager",
+    "crates/platform",
+    "crates/screenshot",
+    "crates/activity",
+    "crates/app-tracker",
+    "crates/app-tracker-host",
+    "crates/url-tracker",
+    "crates/video",
+    "crates/storage",
+    "platforms/windows",
+]
+exclude = ["platforms/macos", "platforms/linux"]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+publish = false
+rust-version = "1.74"
+
+[workspace.dependencies]
+ctrlc = "3.4"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+wind-core = { path = "crates/core" }
+wind-config = { path = "crates/config" }
+wind-platform = { path = "crates/platform" }
+wind-service-manager = { path = "crates/service-manager" }
+wind-screenshot = { path = "crates/screenshot" }
+wind-activity = { path = "crates/activity" }
+wind-app-tracker = { path = "crates/app-tracker" }
+wind-url-tracker = { path = "crates/url-tracker" }
+wind-video = { path = "crates/video" }
+wind-storage = { path = "crates/storage" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"

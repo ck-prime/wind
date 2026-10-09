@@ -1,0 +1,40 @@
+# Single source of truth for product branding and technical product identity.
+# Change display_name to rename what people see. Do not change identifier
+# when only the visible name changes.
+
+[product]
+name = "Wind"
+display_name = "Wind"
+identifier = "com.wind.agent"
+version = "0.1.0"
+
+[branding]
+logo = "assets/branding/logo.svg"
+
+[company]
+name = "Wind"
+
+# Omitted service tables default to enabled = true.
+# Disabled is a configuration state, not a startup failure.
+
+[services.screenshot]
+enabled = true
+
+[services.activity]
+enabled = true
+
+[services.app_tracker]
+enabled = true
+
+[services.url_tracker]
+enabled = true
+
+[services.video]
+enabled = false
+
+# Resident runtime. Omitted fields use the built-in defaults:
+# health checks every 10 seconds, and each service stop budget is 5 seconds.
+
+[runtime]
+health_check_interval_seconds = 10
+shutdown_timeout_seconds = 5

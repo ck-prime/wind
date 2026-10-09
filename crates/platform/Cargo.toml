@@ -1,0 +1,30 @@
+[package]
+name = "wind-platform"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Operating system, session, and runtime path detection"
+rust-version.workspace = true
+
+[dependencies]
+ctrlc.workspace = true
+wind-activity.workspace = true
+wind-app-tracker.workspace = true
+wind-core.workspace = true
+wind-screenshot.workspace = true
+wind-storage.workspace = true
+wind-url-tracker.workspace = true
+wind-video.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+wind-macos = { path = "../../platforms/macos" }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+wind-windows = { path = "../../platforms/windows" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+wind-linux = { path = "../../platforms/linux" }
+
+[lints]
+workspace = true

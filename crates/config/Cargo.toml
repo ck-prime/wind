@@ -1,0 +1,16 @@
+[package]
+name = "wind-config"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Typed loader for product.toml"
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+toml.workspace = true
+wind-core.workspace = true
+
+[lints]
+workspace = true

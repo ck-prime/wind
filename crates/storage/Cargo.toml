@@ -1,0 +1,16 @@
+[package]
+name = "wind-storage"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Local SQLite, artifact, and secret storage"
+rust-version.workspace = true
+
+[dependencies]
+rusqlite = { version = "0.32", features = ["bundled"] }
+sha2 = "0.10"
+wind-core.workspace = true
+
+[lints]
+workspace = true

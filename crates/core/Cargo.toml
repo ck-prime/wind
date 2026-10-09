@@ -1,0 +1,11 @@
+[package]
+name = "wind-core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Service identity, errors, and structured logging"
+rust-version.workspace = true
+
+[lints]
+workspace = true
